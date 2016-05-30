@@ -56,6 +56,7 @@ function makeList( elem, level ) {
   }
 
   if ( elem.children ) {
+
     level++;
 
     if ( level > maxDeep ) {
@@ -72,6 +73,8 @@ function makeList( elem, level ) {
            && child.tagName != 'SCRIPT'
            && child.tagName != 'META'
            && child.tagName != 'TITLE'
+           && child.tagName != 'LINK'
+           && child.tagName != 'NOSCRIPT'
            && child.tagName != 'BR') {
 
         var newElem = makeList( child, level );
@@ -79,9 +82,12 @@ function makeList( elem, level ) {
           childrenList.appendChild( newElem );
         }
       }
+    }
 
+    if ( childrenList.children.length > 0 ) {
       item.appendChild( childrenList );
     }
+
   }
 
   return item;
