@@ -1,6 +1,5 @@
 var doc = document;
 var codeInput = doc.querySelector('.gnr-code-input');
-var codeOutput = doc.querySelector('.gnr-code-output');
 var treeContent = doc.querySelector('.gnr-tree__content');
 var treePlaceHolder = doc.querySelector('.gnr-tree__placeholder');
 var rangeDeep = doc.querySelector('.gnr-deep__range');
@@ -54,6 +53,7 @@ function setHeadersDefs () {
 //------------------------------
 
 function createTreeFromHTML ( code ) {
+  var codeOutput = document.createElement('div');
 
   if( !code ) {
     treeContent.classList.add('gnr-hidden');
@@ -92,6 +92,13 @@ function makeList ( elem, level ) {
   var tagName = elem.tagName;
   var className = elem.className;
 
+  if ( !elem.customDataSet ) {
+    elem.customDataSet = {
+      prefixes: {},
+      level: level
+    };
+  }
+
   if ( level === 1 ) {
     tagName = 'BODY';
     className = '';
@@ -111,9 +118,9 @@ function makeList ( elem, level ) {
 
   liContent.appendChild ( tagSpan );
 
-  if ( className ) {
+  addClassesAsPrefixes ( elem );
 
-    elem.level = level;
+  if ( className ) {
 
     // Check Bem in levels more then firts child
     if ( level > 2 ) {
@@ -123,8 +130,7 @@ function makeList ( elem, level ) {
     var classSpan = doc.createElement('span');
     classSpan.classList.add('gnr-elem__class', 'gnr-class');
 
-    for (var i = 0; i < elem.classList.length; i++) {
-      var classItem = elem.classList[ i ];
+    Array.prototype.forEach.call( elem.classList, function ( classItem, i ) {
       var classItemSpan = doc.createElement('span');
       classItemSpan.classList.add('gnr-class__item');
       classItemSpan.innerHTML += classItem;
@@ -133,7 +139,7 @@ function makeList ( elem, level ) {
       if ( elem.classList.validBem &&
            elem.classList.validBem[ classItem ] === false  ) {
 
-        classItemSpan.classList.add('gnr-class__item--warning');
+        classItemSpan.classList.add('gnr-highlight');
       }
 
       classSpan.appendChild( classItemSpan );
@@ -141,7 +147,7 @@ function makeList ( elem, level ) {
       if ( i < elem.classList.length - 1) {
         classSpan.innerHTML += ' ';
       }
-    }
+    });
 
     classSpan.innerHTML = '.' + classSpan.innerHTML;
     liContent.appendChild ( classSpan );
@@ -156,10 +162,7 @@ function makeList ( elem, level ) {
 
     level++;
 
-    for ( var i = 0; i < elem.children.length; i++ ){
-
-      var child = elem.children[ i ];
-
+    Array.prototype.forEach.call( elem.children, function ( child ) {
       checkIsWholePage( child );
 
       if ( !checkIsSkippedTag( child )) {
@@ -170,7 +173,7 @@ function makeList ( elem, level ) {
           childrenList.appendChild( newElem );
         }
       }
-    }
+    });
 
     if ( childrenList.children.length > 0 ) {
       if ( level > maxDeep ) {
@@ -197,24 +200,15 @@ function checkBemForElem ( elem ) {
   elem.classList['validBem'] = {};
   var parentPrefixes = findPrefixInParentNode( elem );
 
-  for ( var i = 0; i < elem.classList.length; i++ ) {
-    var classItem = elem.classList[ i ];
+  Array.prototype.forEach.call( elem.classList, function ( classItem ) {
 
-    // Check first part of class with __
+    // Check first part of class with __ (block name)
     if ( classItem.split('__').length > 1 ) {
       var prefixCorrect = false;
       var prefix = classItem.split('__')[0];
 
-      if ( elem.parentNode.classList.contains( prefix ) ) {
+      if ( elem.customDataSet.prefixes[ prefix ]) {
         prefixCorrect = true;
-      }
-      else {
-        // Try to find prefix in parent classes prefixes
-        var parentPrefixes = findPrefixInParentNode( elem );
-
-        if ( parentPrefixes[ prefix ] ) {
-          prefixCorrect = true;
-        }
       }
 
       elem.classList['validBem'][ classItem ] = prefixCorrect;
@@ -224,7 +218,7 @@ function checkBemForElem ( elem ) {
       }
     }
 
-    // Check first part of class with --
+    // Check first part of class with -- (modificator)
     if ( classItem.split('--').length > 1 ) {
       var modifPrefixCorrect = false;
       var modifPrefix = classItem.split('--')[0];
@@ -239,8 +233,7 @@ function checkBemForElem ( elem ) {
         hasBemWarning = true;
       }
     }
-
-  }
+  });
 }
 
 //------------------------------
@@ -249,16 +242,41 @@ function findPrefixInParentNode ( elem ) {
   var classList = elem.parentNode.classList;
   var prefixes = {};
 
-  for (var i = 0; i < classList.length; i++) {
-    var classItem = classList[i];
-
+  Array.prototype.forEach.call( classList, function ( classItem ) {
     if ( classItem.split('__').length > 1 ) {
       var prefix = classItem.split('__')[0];
       prefixes[ prefix ] = prefix;
     }
-  }
+  });
 
   return prefixes;
+}
+
+//------------------------------
+
+function addClassesAsPrefixes ( elem ) {
+  var classList = elem.classList;
+
+  if ( elem.customDataSet.level > 2 ) {
+    copyPrefixes( elem );
+  }
+
+  Array.prototype.forEach.call( classList, function ( classItem ) {
+    // Copy only block names
+    if ( classItem.split('__').length === 1 &&
+         classItem.split('--').length === 1 ) {
+      elem.customDataSet.prefixes[ classItem ] = classItem;
+    }
+  });
+}
+
+//------------------------------
+
+function copyPrefixes ( elem ) {
+  var parent = elem.parentNode;
+  for ( var prefix in parent.customDataSet.prefixes ) {
+    elem.customDataSet.prefixes[ prefix ] = prefix;
+  }
 }
 
 //------------------------------
@@ -281,20 +299,14 @@ rangeDeep.oninput = function () {
 //------------------------------
 
 function showCodeErrors () {
-
   checkHeadersLevels();
   showBemMessage();
-
 }
 
-function showBemMessage () {
+//------------------------------
 
-  if ( hasBemWarning ) {
-    bemMessage.classList.remove( 'gnr-hidden' );
-  }
-  else {
-    bemMessage.classList.add( 'gnr-hidden' );
-  }
+function showBemMessage () {
+  bemMessage.classList.toggle( 'gnr-hidden', ! hasBemWarning );
 }
 
 //------------------------------
@@ -333,8 +345,8 @@ function checkHeadersLevels () {
   }
 
   if ( isWrongOrder ) {
-    for (var i = 0; i < headersOrder.length; i++) {
-      var headerItem = headersOrder[i];
+
+    headersOrder.forEach(function(headerItem) {
       var headerItemSpan = doc.createElement('dd');
       headerItemSpan.classList.add('headers__item');
       headerItemSpan.innerHTML = headerItem;
@@ -347,7 +359,7 @@ function checkHeadersLevels () {
       }
 
       realOrder.appendChild( headerItemSpan );
-    }
+    });
 
     if ( headersMessageContent.firstChild ) {
       headersMessageContent.removeChild( headersMessageContent.firstChild );
@@ -355,24 +367,13 @@ function checkHeadersLevels () {
     headersMessageContent.appendChild( realOrder );
   }
 
-  if ( isWrongOrder ) {
-    headersMessage.classList.remove( 'gnr-hidden' );
-  }
-  else {
-    headersMessage.classList.add( 'gnr-hidden' );
-  }
-
+  headersMessage.classList.toggle( 'gnr-hidden', ! isWrongOrder );
 }
 
 //------------------------------
 
 function checkIsSkippedTag ( elem ) {
-
-  if ( skippedTags.indexOf( elem.tagName) >= 0 ) {
-    return true;
-  }
-
-  return false;
+  return skippedTags.indexOf( elem.tagName) >= 0;
 }
 
 //------------------------------
@@ -386,8 +387,20 @@ function checkIsWholePage( elem ){
 
 //------------------------------
 
+function printCurrentElem( elem ) {
+  var classes = elem.classList.value ? '.' + elem.classList.value : '';
+  var preLine = ' — ';
+
+  for (var i = 1; i < elem.customDataSet.level; i++) {
+    preLine += ' — ';
+  }
+  console.log( preLine, elem.tagName + classes);
+}
+
+//------------------------------
+
 function runDev () {
-  var testMarkup = '<section class="pricеs"><h2>Hello</h2><input class="price" type="radio" id="btn-4" name="toggle" checked><input class="price" type="radio" id="btn-5" name="toggle"><input class="price" type="radio" id="btn-6" name="toggle"><h4>Hello</h4><div class="prices__controls"><label class="control" for="btn-4"></label><label class="control" for="btn-5"></label><label class="control" for="btn-6"></label></div></section>';
+  var testMarkup = '<div class="wrapper"><section class="prices1"><div><h2 class="prices__title">Title</h2><div class="prices__content prices__content--disabled">Content</div></div></section><section class="reviews"><div><h2 class="reviews__title">Title</h2><div class="reviews__content">Content</div></div></section><footer class="footer"><div><h2 class="footer__title">Footer Title</h2><div class="footer__content">Footer Content</div></div></footer></div></div>';
   codeInput.value = testMarkup;
   setHeadersDefs();
   hasBemWarning = false;
